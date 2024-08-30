@@ -1,7 +1,7 @@
 import json
 import os
 
-def get_file_paths(file_name):
+def get_file_paths(file_name): # current directory is local, you should modify it to match the hpc
     base_path = "/Users/raul/Library/CloudStorage/OneDrive-CRG-CentredeRegulacioGenomica/ega.nosync/bioteam/slc00474/execution-qc/vault/archive"
     prefix = file_name[:9]  # EGAF00005
     middle = file_name[9:12]  # 432
@@ -85,6 +85,6 @@ def analyze_file(file_name):
     except Exception as e:
         print(f"Error processing input_screen.txt species file: {e}")
 
-# example usage
+# example usage, modify the file to check the flags for that file, this will change to an option parser
 file_name = "EGAF00005432457"
 analyze_file(file_name)
