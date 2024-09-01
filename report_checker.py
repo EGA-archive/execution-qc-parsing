@@ -1,8 +1,8 @@
 import json
 import os
 
-def get_file_paths(file_name): # current directory is local, you should modify it to match the hpc
-    base_path = "/Users/raul/Library/CloudStorage/OneDrive-CRG-CentredeRegulacioGenomica/ega.nosync/bioteam/slc00474/execution-qc/vault/archive"
+def get_file_paths(file_name):
+    base_path = "/slgpfs/projects/slc00/slc00474/execution-qc/vault/archive/vault/archive"
     prefix = file_name[:9]  # EGAF00005
     middle = file_name[9:12]  # 432
     suffix = file_name[12:15]  # 457
