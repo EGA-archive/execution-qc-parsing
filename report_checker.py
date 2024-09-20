@@ -5,7 +5,7 @@ import argparse
 
 # get paths for BAM/CRAM or FASTQ files
 def get_file_paths(file_name):
-    base_path = "/Users/raul/Library/CloudStorage/OneDrive-CRG-CentredeRegulacioGenomica/ega.nosync/bioteam/slc00474/execution-qc/vault/archive"
+    base_path = "/slgpfs/projects/slc00/slc00474/execution-qc/vault/archive/vault/archive"
     prefix = file_name[:9]  # EGAF00005
     middle = file_name[9:12]  # 432
     suffix = file_name[12:15]  # 457
@@ -18,7 +18,7 @@ def get_file_paths(file_name):
 # check species information (common for both BAM/CRAM and FASTQ)
 def check_species(txt_path):
     if not os.path.exists(txt_path):
-        return f"⚠️ Warning: Species file input_screen.txt not found at {txt_path}\n"
+        return f" Error: Species file input_screen.txt not found at {txt_path}\n"
 
     try:
         with open(txt_path, 'r') as file:
@@ -37,9 +37,9 @@ def check_species(txt_path):
                     # check if the first cell in the third line contains "Human"
                     first_cell = cells[0]
                     if first_cell == "Human":
-                        return f"✅ Most reads mapped to Human ({percent_mapped:.2f}%).\n"
+                        return ""  # No warning, pass the OK message
                     else:
-                        return f"🚨 Warning: Most reads mapped to {first_cell} ({percent_mapped:.2f}%).\n"
+                        return f" Warning: Most reads mapped to {first_cell} ({percent_mapped:.2f}%).\n"
     except Exception as e:
         return f"Error processing input_screen.txt species file: {e}\n"
 
@@ -50,9 +50,7 @@ def check_species(txt_path):
 def analyze_bam_cram(json_path, txt_path):
     output = ""
     if not os.path.exists(json_path):
-        return f"⚠️ BAM/CRAM QC report not found at {json_path}\n"
-
-    output += "✅ BAM/CRAM QC report loaded.\n"
+        return f"Error: BAM/CRAM QC report not found at {json_path}\n"
 
     try:
         with open(json_path, 'r') as file:
@@ -64,9 +62,7 @@ def analyze_bam_cram(json_path, txt_path):
 
         # check aligned reads percentage
         if reads_unaligned > 40.0:
-            output += f"⚠️ Reads unaligned ({reads_unaligned:.2f}%) exceeds 40%.\n"
-        else:
-            output += f"✅ Reads unaligned ({reads_unaligned:.2f}%) is acceptable (<40%).\n"
+            output += f"Warning: Reads unaligned ({reads_unaligned:.2f}%) exceeds 40%.\n"
 
         # sum map quality values from 0 to 29
         map_quality_distribution = data["Data"]["MappingQualityDistribution"]
@@ -76,12 +72,12 @@ def analyze_bam_cram(json_path, txt_path):
 
         # check map quality percentage
         if low_map_quality_percentage > 5.0:
-            output += f"⚠️ Map quality <30 ({low_map_quality_percentage:.2f}%) exceeds 5%.\n"
-        else:
-            output += f"✅ Map quality >30 ({low_map_quality_percentage:.2f}%) is acceptable (≤5%).\n"
+            output += f"Warning: Map quality <30 ({low_map_quality_percentage:.2f}%) exceeds 5%.\n"
 
         # run species function
-        output += check_species(txt_path)
+        species_warning = check_species(txt_path)
+        if species_warning:
+            output += species_warning
 
     except (json.JSONDecodeError, KeyError) as e:
         output += f"Error processing BAM/CRAM QC report: {e}\n"
@@ -95,7 +91,7 @@ def analyze_fastq(zip_path, txt_path):
 
     # extract qc data from zip
     if not os.path.exists(zip_path):
-        output += f"⚠️ FASTQ QC report not found at {zip_path}\n"
+        output += f"Error: FASTQ QC report not found at {zip_path}\n"
         return output
 
     try:
@@ -104,10 +100,8 @@ def analyze_fastq(zip_path, txt_path):
             fastqc_data_path = "/tmp/stdin_fastqc/fastqc_data.txt"
 
         if not os.path.exists(fastqc_data_path):
-            output += f"⚠️ fastqc_data.txt not found in {zip_path}\n"
+            output += f"Error: fastqc_data.txt not found in {zip_path}\n"
             return output
-
-        output += "✅ FASTQ QC report loaded.\n"
 
         # analyze fastqc report
         with open(fastqc_data_path, 'r') as file:
@@ -147,24 +141,22 @@ def analyze_fastq(zip_path, txt_path):
 
         # output GC content result
         if gc_content_percentage is not None:
-            if 35 <= gc_content_percentage <= 55:
-                output += f"✅ GC content ({gc_content_percentage:.2f}%) is acceptable (35%-55%).\n"
-            else:
-                output += f"⚠️ GC content ({gc_content_percentage:.2f}%) is out of acceptable range (35%-55%).\n"
+            if not (35 <= gc_content_percentage <= 55):
+                output += f"Warning: GC content ({gc_content_percentage:.2f}%) is out of acceptable range (35%-55%).\n"
         else:
-            output += "⚠️ Unable to find GC content percentage.\n"
+            output += "Error: Unable to find GC content percentage.\n"
 
         # output duplicate reads result
         if duplicate_reads_percentage is not None:
-            if duplicate_reads_percentage <= 20:
-                output += f"✅ Duplicate reads ({duplicate_reads_percentage:.2f}%) are within the acceptable range (≤20%).\n"
-            else:
-                output += f"⚠️ Duplicate reads ({duplicate_reads_percentage:.2f}%) exceed the acceptable threshold (20%).\n"
+            if duplicate_reads_percentage > 20:
+                output += f"Warning: Duplicate reads ({duplicate_reads_percentage:.2f}%) exceed the acceptable threshold (20%).\n"
         else:
-            output += "⚠️ Unable to find duplicate percentage.\n"
+            output += "Error: Unable to find duplicate percentage.\n"
 
         # check species function and append
-        output += check_species(txt_path)
+        species_warning = check_species(txt_path)
+        if species_warning:
+            output += species_warning
 
         return output
 
@@ -175,8 +167,7 @@ def analyze_fastq(zip_path, txt_path):
 
 # main function to infer if EGAF is BAM/CRAM or FASTQ
 def analyze_file(file_name, output_file):
-    # Print the EGAF identifier
-    output = f">> {file_name}\n"
+    output = ""
 
     json_path, txt_path, zip_path = get_file_paths(file_name)
 
@@ -186,11 +177,13 @@ def analyze_file(file_name, output_file):
     elif os.path.exists(zip_path):
         output += analyze_fastq(zip_path, txt_path)
     else:
-        output += "⚠️ No valid QC report found.\n"
+        output += "Error: No valid QC report found.\n"
 
-    # append the result to output file
-    with open(output_file, 'a') as f:
-        f.write(output)
+    # write output only if there are warnings
+    if output:
+        output = f">> {file_name}\n" + output
+        with open(output_file, 'a') as f:
+            f.write(output)
 
 
 # parse EGAFs to look from file (txt/csv/tsv)
