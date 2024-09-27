@@ -75,8 +75,8 @@ def analyze_bam_cram(json_path, txt_path, warn_missing_file):
         low_map_quality_percentage = (low_map_quality_sum / total_reads) * 100
 
         # check map quality percentage
-        if low_map_quality_percentage > 5.0:
-            output += "Warning: Map quality <30 ({:.2f}%) exceeds 5%.\n".format(low_map_quality_percentage)
+        if low_map_quality_percentage > 20.0:
+            output += "Warning: Map quality <30 ({:.2f}%) exceeds 20%.\n".format(low_map_quality_percentage)
 
         # check duplicate reads percentage
         duplicates_percentage = data["Data"]["Duplicates"][0] * 100
@@ -179,20 +179,23 @@ def analyze_fastq(zip_path, txt_path, warn_missing_file):
 # main function to infer if EGAF is BAM/CRAM or FASTQ
 def analyze_file(file_name, output_file, warn_missing_file):
     output = ""
+    file_type = ""  # Variable to store file type
 
     json_path, txt_path, zip_path = get_file_paths(file_name)
 
     # check if is BAM/CRAM (JSON) or FASTQ (ZIP)
     if os.path.exists(json_path):
+        file_type = "BAM/CRAM"  # Set file type to BAM/CRAM
         output += analyze_bam_cram(json_path, txt_path, warn_missing_file)
     elif os.path.exists(zip_path):
+        file_type = "FASTQ"  # Set file type to FASTQ
         output += analyze_fastq(zip_path, txt_path, warn_missing_file)
     else:
         output += "Error: No valid QC report found.\n"
 
     # write output only if there are warnings
     if output:
-        output = ">> {}\n".format(file_name) + output
+        output = ">> {} | {}\n".format(file_name, file_type) + output
         with open(output_file, 'a') as f:
             f.write(output)
 
