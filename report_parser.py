@@ -84,22 +84,35 @@ def analyze_bamcram(jpath: Path, dec_stats: Optional[str]) -> List[Tuple[str, fl
     try:
         with gzip.open(jpath, "rt") as fh:
             data = json.load(fh)
+
+        # NEW: capture top-level InsertSize
+        ins = data.get("InsertSize")
+        if isinstance(ins, (int, float)):
+            out.append(("insert_size", float(ins)))
+
         d = data.get("Data", {})
+
         if "MappedReads" in d:
             out.append(("unaligned", 100 - d["MappedReads"][0] * 100))
+
         if "MappingQualityDistribution" in d:
             dist = d["MappingQualityDistribution"]
             tot = sum(c for _, c in dist)
             low = sum(c for q, c in dist if q <= 29)
             if tot:
                 out.append(("mapq", low / tot * 100))
+
         if "Duplicates" in d:
             out.append(("duplicate_reads", d["Duplicates"][0] * 100))
+
         if dec_stats:
-            if (gc_val := _mean_gc_from_stats(dec_stats)) is not None:
+            gc_val = _mean_gc_from_stats(dec_stats)
+            if gc_val is not None:
                 out.append(("gc_content", gc_val))
+
     except Exception:
         pass
+
     return out
 
 def analyze_fastq(zpath: Path) -> List[Tuple[str, float]]:
