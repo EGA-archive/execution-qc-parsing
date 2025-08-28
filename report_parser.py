@@ -85,7 +85,6 @@ def analyze_bamcram(jpath: Path, dec_stats: Optional[str]) -> List[Tuple[str, fl
         with gzip.open(jpath, "rt") as fh:
             data = json.load(fh)
 
-        # NEW: capture top-level InsertSize
         ins = data.get("InsertSize")
         if isinstance(ins, (int, float)):
             out.append(("insert_size", float(ins)))
