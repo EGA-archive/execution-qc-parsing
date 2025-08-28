@@ -22,7 +22,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-BASE_PATH = Path("/slgpfs/projects/slc00/slc00474/execution-qc/vault/archive")
+BASE_PATH = Path("/gpfs/projects/slc00/SL/slc00474/execution-qc/vault/archive")
 
 # ----------------------------------------------------------------------------
 # Helper functions
