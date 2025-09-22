@@ -25,6 +25,27 @@ An ultra-fast, I/O-friendly Python utility to scan **millions** of EGAF entries 
   ```
   /slgpfs/projects/slc00/slc00474/execution-qc/vault/archive
   ```
+## What it reads
+
+The script expects the standard EGAF-like directory layout under a fixed base path:
+
+```
+BASE_PATH/<egaf[:9]>/<egaf[9:12]>/<egaf[12:15]>/execution/
+    ├── {EGAF}_report.json.gz         # BAM/CRAM QC JSON or VCF QC JSON
+    ├── stdin_fastqc.zip              # FastQC report
+    ├── stats.txt.openssl.gz          # optional, encrypted samtools stats (BAM/CRAM)
+    └── ...
+```
+
+Base path in this repo’s code:
+
+```
+BASE_PATH = Path("/gpfs/projects/slc00/SL/slc00474/execution-qc/vault/archive")
+```
+
+> If the archive lives elsewhere, update that constant or overlay a symlink.
+
+
 
 ## Usage
 
