@@ -31,7 +31,6 @@ BASE_PATH = Path("/gpfs/projects/slc00/SL/slc00474/execution-qc/vault/archive")
 def _if_exists(p: Path) -> Optional[Path]:
     return p if p.is_file() else None
 
-
 def get_file_paths(egaf: str) -> Dict[str, Optional[Path]]:
     pre, mid, suf = egaf[:9], egaf[9:12], egaf[12:15]
     base = BASE_PATH / pre / mid / suf / "execution"
@@ -54,7 +53,6 @@ def _evp_bytes_to_key(pwd: bytes, salt: bytes, klen: int, ivlen: int) -> Tuple[b
         d = md5.finalize()
         dtot += d
     return dtot[:klen], dtot[klen:klen + ivlen]
-
 
 def decrypt_stats_file(enc: bytes, pwd: bytes) -> str:
     with gzip.GzipFile(fileobj=BytesIO(enc)) as gz:
@@ -81,28 +79,39 @@ def _mean_gc_from_stats(text: str) -> Optional[float]:
             count += n
     return total / count if count else None
 
-
 def analyze_bamcram(jpath: Path, dec_stats: Optional[str]) -> List[Tuple[str, float]]:
     out: List[Tuple[str, float]] = []
     try:
         with gzip.open(jpath, "rt") as fh:
             data = json.load(fh)
+
+        ins = data.get("InsertSize")
+        if isinstance(ins, (int, float)):
+            out.append(("insert_size", float(ins)))
+
         d = data.get("Data", {})
+
         if "MappedReads" in d:
             out.append(("unaligned", 100 - d["MappedReads"][0] * 100))
+
         if "MappingQualityDistribution" in d:
             dist = d["MappingQualityDistribution"]
             tot = sum(c for _, c in dist)
             low = sum(c for q, c in dist if q <= 29)
             if tot:
                 out.append(("mapq", low / tot * 100))
+
         if "Duplicates" in d:
             out.append(("duplicate_reads", d["Duplicates"][0] * 100))
+
         if dec_stats:
-            if (gc_val := _mean_gc_from_stats(dec_stats)) is not None:
+            gc_val = _mean_gc_from_stats(dec_stats)
+            if gc_val is not None:
                 out.append(("gc_content", gc_val))
+
     except Exception:
         pass
+
     return out
 
 def analyze_fastq(zpath: Path) -> List[Tuple[str, float]]:
@@ -125,7 +134,7 @@ def analyze_fastq(zpath: Path) -> List[Tuple[str, float]]:
                     elif ln.startswith(">>Sequence Duplication Levels"):
                         for ln in it:
                             if ln.startswith("#Total Deduplicated Percentage"):
-                                dup = 100.0 - float(ln.split("\t")[1])
+                                dup = 100 - float(ln.split("\t")[1])
                                 break
                             if ln.startswith(">>END_MODULE"):
                                 break
@@ -136,21 +145,19 @@ def analyze_fastq(zpath: Path) -> List[Tuple[str, float]]:
                             if ln.startswith("#Quality"):
                                 break
 
-                        tot = 0.0
-                        high = 0.0
-                        # accumulate counts
+                        tot = below30 = 0.0
                         for ln in it:
                             if ln.startswith(">>END_MODULE"):
                                 break
                             q, c = map(float, ln.split("\t"))
                             tot += c
-                            # count those with mean Q >= 30
-                            if q >= 30.0:
-                                high += c
+                            # count reads with mean Q ≥ 30
+                            if q >= 30:
+                                below30 += c
 
-                        if tot > 0:
-                            # repurpose q20 variable to hold % reads with mean Q ≥ 30
-                            q20 = high / tot * 100.0
+                        if tot:
+                            # overwrite q20 with % reads mean-Q ≥ 30
+                            q20 = below30 / tot * 100
 
                 if dup is not None:
                     out.append(("duplicate_reads", dup))
@@ -158,13 +165,10 @@ def analyze_fastq(zpath: Path) -> List[Tuple[str, float]]:
                     out.append(("gc_content", gc_pct))
                 if q20 is not None:
                     out.append(("quality_reads", q20))
-
     except Exception:
         pass
 
     return out
-
-
 
 def analyze_vcf(jpath: Path) -> List[Tuple[str, float]]:
     out: List[Tuple[str, float]] = []
@@ -243,28 +247,11 @@ def main():
 
     rows: List[Tuple[str, str, str, float]] = []
     t0 = time.time()
-    total = len(ids)
-    processed = 0
-    report_interval = 1000  # adjust as needed
-
-    def report_progress():
-        elapsed = time.time() - t0
-        pct = processed / total * 100 if total else 0
-        eta = (elapsed / processed * (total - processed)) if processed and total else 0
-        def fmt(sec: float):
-            h = int(sec // 3600)
-            m = int((sec % 3600) // 60)
-            s = int(sec % 60)
-            return f"{h:02d}:{m:02d}:{s:02d}"
-        print(f"Processed {processed}/{total} ({pct:.1f}%) in {fmt(elapsed)}; ETA {fmt(eta)}", flush=True)
 
     if args.threads == 0 or len(ids) == 1:
         # Serial path (debug‑friendly)
         for eg in ids:
             rows.extend(process_file((eg, args.include_crypt)))
-            processed += 1
-            if processed % report_interval == 0 or processed == total:
-                report_progress()
     else:
         batch_size = args.threads * 2
         with concurrent.futures.ProcessPoolExecutor(max_workers=args.threads) as ex:
@@ -274,10 +261,8 @@ def main():
                     try:
                         rows.extend(fut.result())
                     except Exception:
+                        # record failure for that EGAF
                         rows.append((futs[fut], "__error__", "future_exception", -1))
-                    processed += 1
-                    if processed % report_interval == 0 or processed == total:
-                        report_progress()
                 gc.collect()
 
     # Write CSV
